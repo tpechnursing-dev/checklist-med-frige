@@ -233,6 +233,32 @@
     .rate{font-size:32px}
     .rmeta{flex:1 1 100%;order:2}
     .pass-pill{margin-left:0;flex:1 1 100%;text-align:center;order:3}
+
+    /* 防止 iOS 對焦時自動放大（需 ≥16px） */
+    .fld input,.fld select,.roc input,.defbox textarea{font-size:16px}
+    .roc{flex-wrap:nowrap}
+    .roc .u{font-size:12px}
+
+    /* 按鈕放大、易點 */
+    .bar{gap:8px}
+    .bar>.btn,.bar>label.btn{flex:1 1 auto;padding:12px 14px}
+    .chartbox svg{min-width:440px}
+
+    /* 寬表格 → 卡片式堆疊（免左右滑） */
+    table.dt-cards thead{display:none}
+    table.dt-cards,table.dt-cards tbody{display:block;width:100%}
+    table.dt-cards tr{display:block;border:1px solid var(--line);border-radius:11px;margin-bottom:11px;
+      padding:5px 2px;background:#fff;box-shadow:var(--shadow)}
+    table.dt-cards td{display:flex;justify-content:space-between;align-items:center;gap:12px;border:none;
+      padding:8px 14px;font-size:14.5px;border-bottom:1px solid #eef2f0}
+    table.dt-cards td:last-child{border-bottom:none}
+    table.dt-cards td::before{content:attr(data-label);font-weight:700;color:var(--gray);font-size:12.5px;flex:none}
+    table.dt-cards td.cell-idx{display:none}
+    table.dt-cards td.cell-wide{flex-direction:column;align-items:flex-start;gap:4px;text-align:left}
+    table.dt-cards td.cell-wide::before{font-size:12.5px}
+    table.dt-cards td.cell-act{justify-content:flex-start;gap:8px;padding-top:11px}
+    table.dt-cards td.cell-act::before{display:none}
+    table.dt-cards td.cell-act .btn{flex:1;padding:11px 4px;font-size:14px}
   }
 
   /* ============ PRINT (A4 黑白) ============ */
@@ -272,6 +298,12 @@
   .p-photos .pcap{font-size:10pt;margin-top:3px}
   .p-title{text-align:center;font-size:15pt;font-weight:700;margin:4px 0 10px;letter-spacing:2px}
   .p-foot{margin-top:14px;font-size:10pt;display:flex;justify-content:space-between;border-top:1px solid #000;padding-top:5px}
+  .p-detail{margin-bottom:16px;page-break-inside:avoid}
+  .p-dhead{font-size:10.5pt;font-weight:700;background:#eaeaea;border:1px solid #000;padding:5px 8px;
+    display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px}
+  .p-dhead .p-dright{font-weight:400}
+  .p-detail table.p-items{margin-top:0}
+  .p-deflabel{font-size:10pt;font-weight:700;color:#c8201c;margin:4px 0 4px}
 </style>
 </head>
 <body>
@@ -306,7 +338,12 @@
         </div>
         <div class="card-b">
           <div class="grid g3">
-            <div class="fld"><label>受評單位</label><input v-model.trim="form.unit" placeholder="如：興岩長照"></div>
+            <div class="fld"><label>受評單位</label>
+              <select v-model="form.unit">
+                <option value="">請選擇單位</option>
+                <option v-for="u in unitList" :key="u" :value="u">{{u}}</option>
+              </select>
+            </div>
             <div class="fld"><label>稽核者</label><input v-model.trim="form.auditor" placeholder="稽核人員"></div>
             <div class="fld"><label>稽核日期（民國）</label>
               <div class="roc">
@@ -415,27 +452,27 @@
       <div class="card" v-if="filtered.length">
         <div class="card-h"><span class="tag"></span><h2>稽核紀錄明細</h2></div>
         <div class="card-b" style="overflow-x:auto">
-          <table class="dt">
+          <table class="dt dt-cards">
             <thead><tr>
               <th>序</th><th>受評單位</th><th>稽核日期</th><th>稽核者</th>
               <th>正確</th><th>不正確</th><th>不適用</th><th>正確率</th><th>結果</th><th>缺失照片</th><th>操作</th>
             </tr></thead>
             <tbody>
               <tr v-for="(r,i) in filtered" :key="r.id">
-                <td class="mono">{{i+1}}</td>
-                <td><b>{{r.unit||'—'}}</b></td>
-                <td class="mono">{{r.y}}/{{pad(r.m)}}/{{pad(r.d)}}</td>
-                <td>{{r.auditor||'—'}}</td>
-                <td class="mono">{{calc(r).ok}}</td>
-                <td class="mono" :style="calc(r).bad?'color:var(--red);font-weight:700':''">{{calc(r).bad}}</td>
-                <td class="mono">{{calc(r).na}}</td>
-                <td class="mono"><b>{{calc(r).scored? calc(r).rate+'%':'—'}}</b></td>
-                <td><span class="pill" :class="calc(r).pass?'ok':'no'">{{calc(r).pass?'通過':'不通過'}}</span></td>
-                <td class="mono">{{photoCount(r)}}</td>
-                <td>
+                <td class="mono cell-idx">{{i+1}}</td>
+                <td data-label="受評單位"><b>{{r.unit||'—'}}</b></td>
+                <td class="mono" data-label="稽核日期">{{r.y}}/{{pad(r.m)}}/{{pad(r.d)}}</td>
+                <td data-label="稽核者">{{r.auditor||'—'}}</td>
+                <td class="mono" data-label="正確">{{calc(r).ok}}</td>
+                <td class="mono" data-label="不正確" :style="calc(r).bad?'color:var(--red);font-weight:700':''">{{calc(r).bad}}</td>
+                <td class="mono" data-label="不適用">{{calc(r).na}}</td>
+                <td class="mono" data-label="正確率"><b>{{calc(r).scored? calc(r).rate+'%':'—'}}</b></td>
+                <td data-label="結果"><span class="pill" :class="calc(r).pass?'ok':'no'">{{calc(r).pass?'通過':'不通過'}}</span></td>
+                <td class="mono" data-label="缺失照片">{{photoCount(r)}}</td>
+                <td class="cell-act">
                   <button class="btn ghost sm" @click="editRecord(r)">編輯</button>
                   <button class="btn ghost sm" @click="printOne(r)">列印</button>
-                  <button class="btn danger sm" @click="delRecord(r.id)">刪</button>
+                  <button class="btn danger sm" @click="delRecord(r.id)">刪除</button>
                 </td>
               </tr>
             </tbody>
@@ -448,15 +485,15 @@
           <span class="sub">長條＝缺失次數　·　折線＝累積百分比　·　虛線＝80%</span></div>
         <div class="card-b">
           <div class="chartbox"><pareto-chart :p="pareto"></pareto-chart></div>
-          <table class="dt" style="margin-top:16px">
+          <table class="dt dt-cards" style="margin-top:16px">
             <thead><tr><th>排序</th><th>稽核項目</th><th>缺失次數</th><th>百分比</th><th>累積百分比</th></tr></thead>
             <tbody>
               <tr v-for="(r,i) in pareto.rows" :key="r.idx">
-                <td class="mono">{{i+1}}</td>
-                <td><b class="mono">{{r.idx+1}}.</b> {{r.full}}</td>
-                <td class="mono">{{r.count}}</td>
-                <td class="mono">{{r.pct}}%</td>
-                <td class="mono"><b>{{r.cumPct}}%</b></td>
+                <td class="mono" data-label="排序">{{i+1}}</td>
+                <td class="cell-wide" data-label="稽核項目"><b class="mono">{{r.idx+1}}.</b> {{r.full}}</td>
+                <td class="mono" data-label="缺失次數">{{r.count}}</td>
+                <td class="mono" data-label="百分比">{{r.pct}}%</td>
+                <td class="mono" data-label="累積百分比"><b>{{r.cumPct}}%</b></td>
               </tr>
             </tbody>
           </table>
@@ -629,6 +666,42 @@
       <div class="p-foot"><span>維護單位：護理部護理品質管理委員會</span><span>© 鄭瑞賢 製作・版權所有</span></div>
     </div>
 
+    <!-- 總表稽核明細（逐項正確/不正確 + 缺失照片） -->
+    <div v-if="printMode==='summary' && filtered.length" class="p-page p-doc">
+      <div class="p-title">稽核明細（各項稽核結果與缺失照片）</div>
+      <div class="p-meta" style="margin-bottom:6px">
+        受評單位：{{filterUnit||'全部單位'}}　·　文件編號：NSR-Q-OQM-A21　·　共 {{filtered.length}} 筆稽核
+      </div>
+      <div v-for="(r,ri) in filtered" :key="'det'+r.id" class="p-detail">
+        <div class="p-dhead">
+          {{ri+1}}. 受評單位：{{r.unit}}　｜　稽核日期：中華民國 {{r.y}} 年 {{r.m}} 月 {{r.d}} 日　｜　稽核者：{{r.auditor||'—'}}
+          <span class="p-dright">正確 {{calc(r).ok}}　不正確 {{calc(r).bad}}　不適用 {{calc(r).na}}　｜　正確率 {{calc(r).scored?calc(r).rate:'—'}}%　｜　<b>{{calc(r).pass?'通過':'不通過'}}</b></span>
+        </div>
+        <table class="p-items">
+          <thead><tr><th>稽核內容</th><th style="width:42px">正確</th><th style="width:52px">不正確</th><th style="width:52px">不適用</th></tr></thead>
+          <tbody>
+            <tr v-for="(it,i) in items" :key="i">
+              <td>{{i+1}}. {{it}}</td>
+              <td class="c mk">{{r.answers[i]==='ok'?'✓':''}}</td>
+              <td class="c mk" style="color:#c8201c">{{r.answers[i]==='bad'?'✓':''}}</td>
+              <td class="c mk">{{r.answers[i]==='na'?'✓':''}}</td>
+            </tr>
+          </tbody>
+        </table>
+        <div v-if="recDefects(r).length" class="p-photos" style="margin-top:7px">
+          <div class="p-deflabel">缺失照片佐證：</div>
+          <div class="pp-grid">
+            <div v-for="(d,di) in recDefects(r)" :key="di">
+              <div class="pcap-no">▲ 第 {{d.itemNo}} 項缺失</div>
+              <img :src="d.src">
+              <div class="pcap">{{d.itemText}}<br>說明：{{d.note||'—'}}</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="p-foot"><span>維護單位：護理部護理品質管理委員會</span><span>© 鄭瑞賢 製作・版權所有</span></div>
+    </div>
+
     <!-- 缺失照片登錄表 -->
     <div v-if="printMode==='photos'" class="p-page p-doc">
       <div class="p-title">缺失照片登錄表</div>
@@ -693,6 +766,7 @@ createApp({
     return {
       tab:'entry',
       methodList:['實際操作','口述','觀察法','訪談'],
+      unitList:['12西','11西','10西','9東','9西','8東','7東','7西','6東','6西','5西','4西','OR','ICU','ER','詠愛'],
       items:[
         '冰箱藥物能採一藥一盒分開裝置',
         '每個藥盒均能標示藥物名稱，藥名易混淆者，應明顯區分擺出',
