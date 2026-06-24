@@ -219,7 +219,7 @@
     .stat{padding:13px 14px}
     .stat .n{font-size:25px}
 
-    .roc input{width:auto;flex:1;min-width:0;padding:9px 3px}
+    .roc input{flex:0 0 auto;width:60px;min-width:0;padding:9px 2px;text-align:center}
 
     .item-row{flex-wrap:wrap;gap:9px;padding:12px}
     .item-txt{flex:1 1 calc(100% - 38px);font-size:14.5px}
@@ -236,8 +236,8 @@
 
     /* 防止 iOS 對焦時自動放大（需 ≥16px） */
     .fld input,.fld select,.roc input,.defbox textarea{font-size:16px}
-    .roc{flex-wrap:nowrap}
-    .roc .u{font-size:12px}
+    .roc{flex-wrap:nowrap;gap:5px}
+    .roc .u{font-size:12px;flex:none}
 
     /* 按鈕放大、易點 */
     .bar{gap:8px}
