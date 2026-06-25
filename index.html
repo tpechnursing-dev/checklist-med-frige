@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>冷藏藥品冰箱管理標準作業 E化稽核系統</title>
 <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
 <style>
   :root{
     --green:#0f7a4d;        /* 臺北市立聯合醫院 H 綠 */
@@ -468,7 +469,8 @@
                 <option v-for="u in unitOptions" :key="u" :value="u">{{u}}</option>
               </select>
             </div>
-            <div style="margin-left:auto;align-self:flex-end">
+            <div style="margin-left:auto;align-self:flex-end;display:flex;gap:8px">
+              <button class="btn primary sm" @click="exportExcel" :disabled="!filtered.length">匯出 Excel</button>
               <button class="btn ghost sm" @click="printSummary" :disabled="!filtered.length">列印總表</button>
             </div>
           </div>
@@ -1098,6 +1100,121 @@ createApp({
     },
     pad(n){ return String(n).padStart(2,'0'); },
     cellVal(r,i){ const a=r.answers[i]; return a==='ok'?'1':a==='bad'?'0':''; },
+    buildNoteText(){
+      const m=this.matrix; let lines=[];
+      if(this.summaryNote && this.summaryNote.trim()) lines.push(this.summaryNote.trim());
+      m.defectList.forEach(d=>{
+        lines.push(`〔缺${d.n}〕${d.unit}${d.ratee?'／'+d.ratee:''} 第${d.itemNo}項：${d.note||d.itemText}`);
+      });
+      if(!lines.length) lines.push('本次稽核無缺失項目。');
+      return lines.join('\n');
+    },
+    exportExcel(){
+      const X=window.XLSX;
+      if(!X){ this.flash('Excel 函式庫尚未載入，請稍候再試'); return; }
+      const m=this.matrix, recs=m.recs, N=recs.length, items=this.items;
+      if(!N){ this.flash('沒有可匯出的稽核紀錄'); return; }
+      const TC=2+N+4, LC=TC-1;              // 總欄數、最後欄
+      const blank=()=>Array(TC).fill('');
+      const aoa=[];
+      let r=blank(); r[0]='臺北市立聯合醫院　仁愛院區　護理品管稽核總表'; aoa.push(r);
+      r=blank(); r[0]=`稽核項目：冷藏藥品冰箱管理標準作業正確率　　閾值：100%　　稽核員：${this.summaryAuditor}　　稽核日期：${this.summaryDate}`; aoa.push(r);
+      r=blank(); r[0]='題號'; r[1]='受稽核單位'; recs.forEach((rc,i)=>r[2+i]=rc.unit); r[2+N]='通過項目'; r[2+N+2]='不通過項目'; aoa.push(r);
+      r=blank(); r[1]='受稽核者'; recs.forEach((rc,i)=>r[2+i]=rc.ratee||''); aoa.push(r);
+      r=blank(); r[1]='受稽核日期'; recs.forEach((rc,i)=>r[2+i]=`${this.pad(rc.m)}/${this.pad(rc.d)}`); aoa.push(r);
+      r=blank(); r[1]='項目說明'; recs.forEach((rc,i)=>r[2+i]='稽核結果'); r[2+N]='件數'; r[2+N+1]='百分比'; r[2+N+2]='件數'; r[2+N+3]='百分比'; aoa.push(r);
+      const itemStart=aoa.length;
+      items.forEach((it,i)=>{
+        r=blank(); r[0]=i+1; r[1]=it;
+        recs.forEach((rc,ci)=>{ const v=this.cellVal(rc,i); r[2+ci]=v===''?'':Number(v); });
+        r[2+N]=m.perItem[i].ok; r[2+N+1]=m.perItem[i].passPct/100; r[2+N+2]=m.perItem[i].bad; r[2+N+3]=m.perItem[i].failPct/100;
+        aoa.push(r);
+      });
+      const aggStart=aoa.length;
+      const aggRows=[
+        ['通過項目', u=>u.ok, m.totalOk, false],
+        ['不通過項目', u=>u.bad, m.totalBad, false],
+        ['不適用項目', u=>u.na, m.totalNa, false],
+        ['有效稽核題數', u=>u.valid, m.totalValid, false],
+        ['單一樣本通過率', u=>u.rate/100, '平均 '+m.avgRate+'%', true]
+      ];
+      aggRows.forEach(a=>{ r=blank(); r[0]=a[0]; recs.forEach((rc,ci)=>r[2+ci]=a[1](m.perUnit[ci])); r[2+N]=a[2]; aoa.push(r); });
+      const sumStart=aoa.length;
+      const note=this.buildNoteText();
+      r=blank(); r[0]='通過閾值樣本數'; r[2]=m.passN; r[3]='備註：\n'+note; aoa.push(r);
+      r=blank(); r[0]='稽核總樣本數'; r[2]=m.sampleN; aoa.push(r);
+      r=blank(); r[0]='總樣本通過率'; r[2]=m.sampleRate/100; aoa.push(r);
+      r=blank(); r[0]='稽核通過項目平均值'; r[2]=m.avgRate/100; aoa.push(r);
+      const sigRow=aoa.length;
+      r=blank(); r[0]='護理長核章：________________　　品管督導核章：________________　　院區主任核章：________________'; aoa.push(r);
+
+      const ws=X.utils.aoa_to_sheet(aoa);
+      const lastRow=aoa.length-1;
+      ws['!ref']=X.utils.encode_range({s:{r:0,c:0},e:{r:lastRow,c:LC}});
+      // merges
+      const M=[];
+      M.push({s:{r:0,c:0},e:{r:0,c:LC}});
+      M.push({s:{r:1,c:0},e:{r:1,c:LC}});
+      M.push({s:{r:2,c:0},e:{r:5,c:0}});
+      M.push({s:{r:2,c:2+N},e:{r:4,c:2+N+1}});
+      M.push({s:{r:2,c:2+N+2},e:{r:4,c:2+N+3}});
+      for(let k=0;k<5;k++){ M.push({s:{r:aggStart+k,c:0},e:{r:aggStart+k,c:1}}); M.push({s:{r:aggStart+k,c:2+N},e:{r:aggStart+k,c:LC}}); }
+      M.push({s:{r:sumStart,c:3},e:{r:sumStart+3,c:LC}});
+      for(let k=0;k<4;k++) M.push({s:{r:sumStart+k,c:0},e:{r:sumStart+k,c:1}});
+      M.push({s:{r:sigRow,c:0},e:{r:sigRow,c:LC}});
+      ws['!merges']=M;
+      ws['!pageSetup']={orientation:'landscape',scale:0,fitToWidth:1,fitToHeight:0};
+      ws['!margins']={left:0.3,right:0.3,top:0.4,bottom:0.4,header:0.2,footer:0.2};
+      // column widths
+      const cols=[{wch:5},{wch:38}]; for(let i=0;i<N;i++)cols.push({wch:7}); cols.push({wch:7},{wch:8},{wch:7},{wch:8}); ws['!cols']=cols;
+      // row heights
+      const rows=[{hpt:24},{hpt:18}]; ws['!rows']=rows;
+      for(let i=itemStart;i<aggStart;i++) rows[i]={hpt:32};
+      rows[sumStart]={hpt:18};
+      // ---- styles ----
+      const thin={style:'thin',color:{rgb:'000000'}};
+      const BD={top:thin,bottom:thin,left:thin,right:thin};
+      const sty=(o)=>{ o=o||{}; const s={border:BD,font:{name:'標楷體',sz:o.sz||10,bold:!!o.bold},
+        alignment:{horizontal:o.h||'center',vertical:'center',wrapText:o.wrap!==false}};
+        if(o.color)s.font.color={rgb:o.color}; if(o.fill)s.fill={patternType:'solid',fgColor:{rgb:o.fill}}; if(o.fmt)s.numFmt=o.fmt; return s; };
+      const GRAY='E9E9E9';
+      const put=(rr,cc,s)=>{ const a=X.utils.encode_cell({r:rr,c:cc}); if(!ws[a])ws[a]={t:'s',v:''}; ws[a].s=s; };
+      // default border on whole matrix region (row2..lastRow)
+      for(let rr=2;rr<=lastRow;rr++) for(let cc=0;cc<=LC;cc++) put(rr,cc,sty({}));
+      // title & header line
+      put(0,0,{font:{name:'標楷體',sz:15,bold:true},alignment:{horizontal:'center',vertical:'center'}});
+      put(1,0,{font:{name:'標楷體',sz:10.5},alignment:{horizontal:'center',vertical:'center'}});
+      // header band gray
+      put(2,0,sty({bold:true,fill:GRAY}));                 // 題號
+      [['受稽核單位',2],['受稽核者',3],['受稽核日期',4],['項目說明',5]].forEach(([,rr])=>put(rr,1,sty({bold:true,fill:GRAY})));
+      for(let i=0;i<N;i++){ put(2,2+i,sty({bold:true,fill:GRAY})); put(5,2+i,sty({bold:true,fill:GRAY})); }
+      put(2,2+N,sty({bold:true,fill:GRAY})); put(2,2+N+2,sty({bold:true,fill:GRAY}));
+      put(5,2+N,sty({bold:true,fill:GRAY})); put(5,2+N+1,sty({bold:true,fill:GRAY})); put(5,2+N+2,sty({bold:true,fill:GRAY})); put(5,2+N+3,sty({bold:true,fill:GRAY}));
+      // item rows
+      for(let i=0;i<items.length;i++){ const rr=itemStart+i;
+        put(rr,1,sty({h:'left',wrap:true,sz:9.5}));
+        for(let ci=0;ci<N;ci++){ const bad=recs[ci].answers[i]==='bad'; put(rr,2+ci,sty(bad?{color:'C8201C',bold:true}:{})); }
+        put(rr,2+N,sty({})); put(rr,2+N+1,sty({fmt:'0.0%'})); put(rr,2+N+2,sty({color:'C8201C',bold:true})); put(rr,2+N+3,sty({fmt:'0.0%'}));
+      }
+      // aggregate rows
+      for(let k=0;k<5;k++){ const rr=aggStart+k; put(rr,0,sty({bold:true,fill:GRAY}));
+        const pct=aggRows[k][3];
+        for(let ci=0;ci<N;ci++) put(rr,2+ci,sty(pct?{fmt:'0.0%'}:{}));
+        put(rr,2+N,sty({bold:true}));
+      }
+      // summary block
+      for(let k=0;k<4;k++){ put(sumStart+k,0,sty({bold:true,fill:GRAY})); }
+      put(sumStart,2,sty({})); put(sumStart+1,2,sty({}));
+      put(sumStart+2,2,sty({fmt:'0.0%'})); put(sumStart+3,2,sty({fmt:'0.0%'}));
+      put(sumStart,3,sty({h:'left',wrap:true,sz:9}));     // 備註 merged top-left
+      // signature row
+      put(sigRow,0,sty({h:'left'}));
+
+      const wb=X.utils.book_new(); X.utils.book_append_sheet(wb,ws,'稽核總表');
+      const fn=`冷藏藥品冰箱稽核總表_${this.summaryDate}.xlsx`;
+      X.writeFile(wb,fn);
+      this.flash('已匯出 '+fn);
+    },
     persistNote(){ try{ localStorage.setItem('fridge_audit_note',this.summaryNote); }catch(e){} },
     loadNote(){ try{ const v=localStorage.getItem('fridge_audit_note'); if(v!=null) this.summaryNote=v; }catch(e){} },
     flash(msg){
